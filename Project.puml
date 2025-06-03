@@ -1,0 +1,155 @@
+@startuml ClassLibraryManagerDetailed
+
+' Доменні класи
+package library {
+  class Book {
+    - title: str
+    - author: str
+    - year: int
+    - genre: str
+    - isbn: str
+    - available: bool
+    - issued_to: Optional[str]
+    - issue_date: Optional[date]
+    - times_issued: int
+    + __init__(...)
+  }
+  class User {
+    - user_id: str
+    - first_name: str
+    - last_name: str
+    - email: str
+    - issued_books: List[str]
+    + __init__(...)
+  }
+}
+
+' Фабрика репозиторіїв
+package repository.factory {
+  class RepoBundle {
+    - book_repo: IBookRepository
+    - user_repo: IUserRepository
+    - loan_repo: ILoanRepository
+    + __init__(book_repo, user_repo, loan_repo)
+  }
+  class RepositoryFactory {
+    + create_sqlite(db_path: str): RepoBundle
+    + create_in_memory(): RepoBundle
+  }
+}
+
+' Інтерфейси та реалізації репозиторіїв
+package repository {
+  interface IBookRepository {
+    + add(book: Book)
+    + get(isbn: str): Book?
+    + update(book: Book)
+    + delete(isbn: str)
+    + list_all(): List<Book>
+  }
+  interface IUserRepository {
+    + add(user: User)
+    + get(user_id: str): User?
+    + list_all(): List<User>
+  }
+  interface ILoanRepository {
+    + issue(isbn: str, user_id: str, date: str)
+    + return_book(isbn: str, user_id: str)
+    + list_issued(): List[str]
+  }
+
+  class SQLiteBookRepository {
+    - conn: sqlite3.Connection
+    + add(book: Book)
+    + get(isbn: str): Book?
+    + update(book: Book)
+    + delete(isbn: str)
+    + list_all(): List<Book>
+  }
+  class SQLiteUserRepository {
+    - conn: sqlite3.Connection
+    + add(user: User)
+    + get(user_id: str): User?
+    + list_all(): List<User>
+  }
+  class SQLiteLoanRepository {
+    - conn: sqlite3.Connection
+    + issue(isbn: str, user_id: str, date: str)
+    + return_book(isbn: str, user_id: str)
+    + list_issued(): List[str]
+  }
+
+  SQLiteBookRepository ..|> IBookRepository
+  SQLiteUserRepository ..|> IUserRepository
+  SQLiteLoanRepository ..|> ILoanRepository
+}
+
+' Сервіс з бізнес-логікою та Observer
+package service {
+  interface Observer {
+    + update(event: str, data: dict)
+  }
+
+  class LibraryService {
+    - books: IBookRepository
+    - users: IUserRepository
+    - loans: ILoanRepository
+    - observers: List<Observer>
+    + register_observer(obs: Observer)
+    + notify_observers(event: str, data: dict)
+    + add_book(book: Book)
+    + remove_book(isbn: str)
+    + register_user(user: User)
+    + issue_book(isbn: str, user_id: str): bool
+    + return_book(isbn: str, user_id: str): bool
+    + search_books(**criteria): List<Book>
+    + list_overdue(max_days: int): List[str]
+  }
+}
+
+' UI
+package ui {
+  class LibraryGUI {
+    + list_books()
+    + list_overdue()
+    + list_users()
+    + add_book_popup()
+    + edit_book_popup()
+    + delete_book_popup()
+    + issue_book_popup()
+    + return_book_popup()
+    + search_books_popup()
+    + update(event: str, data: dict)
+  }
+}
+
+' DI-контейнер
+package container {
+  class Container {
+    - config: Configuration
+    - storage_strategy
+    + book_repository: IBookRepository
+    + user_repository: IUserRepository
+    + loan_repository: ILoanRepository
+    + library_service: LibraryService
+  }
+}
+
+' Зв’язки
+RepositoryFactory --> RepoBundle
+RepoBundle --> SQLiteBookRepository : book_repo
+RepoBundle --> SQLiteUserRepository : user_repo
+RepoBundle --> SQLiteLoanRepository : loan_repo
+
+Container --> RepositoryFactory : uses
+Container --> LibraryService : provides
+LibraryService --> IBookRepository : uses
+LibraryService --> IUserRepository : uses
+LibraryService --> ILoanRepository : uses
+LibraryGUI ..> LibraryService : calls
+LibraryGUI ..|> Observer : implements
+
+Book <.. LibraryService : manipulates
+User <.. LibraryService : manipulates
+
+@enduml
